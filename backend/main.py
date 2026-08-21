@@ -996,6 +996,18 @@ async def predict_quality(request: dict):
     result = ml.predict_quality(code)
     return result
 
+
+@app.post("/api/ml/similarity")
+async def check_similarity(request: dict):
+    code1 = request.get('code1', '')
+    code2 = request.get('code2', '')
+    if not code1 or not code2:
+        raise HTTPException(status_code=400, detail="Both code samples required")
+    ml = CodeMLService()
+    similarity = ml.find_similar_code(code1, code2)
+    is_dup = bool(similarity > 60)
+    return {"similarity": similarity, "is_duplicate": is_dup}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

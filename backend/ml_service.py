@@ -93,6 +93,10 @@ class CodeMLService:
             "def x(a,b):\n    return a*b",
             "function y(){return 0}",
             "const z=()=>1;",
+            "def x(a,b):return a+b",
+            "a=1;b=2;c=3",
+            "function z(){return 0}",
+            "x=5",
         ]
         all_codes = good + bad
         labels = [1] * len(good) + [0] * len(bad)

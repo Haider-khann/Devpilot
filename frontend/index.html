@@ -237,6 +237,13 @@
                 <div id="mlQualityResult"></div>
             </div>
             <div class="card">
+                <div class="card-header"><div><div class="card-title">Code Similarity Detector</div><div class="card-subtitle">TF-IDF based duplicate detection</div></div></div>
+                <textarea id="similarityCode1" placeholder="Paste first code sample..." style="margin-bottom:8px;"></textarea>
+                <textarea id="similarityCode2" placeholder="Paste second code sample..."></textarea>
+                <button onclick="checkSimilarity()" style="margin-top:8px;">Check Similarity</button>
+                <div id="similarityResult"></div>
+            </div>
+            <div class="card">
                 <div class="card-title" style="margin-bottom:8px;">Test Prediction</div>
                 <textarea id="mlTestInput" placeholder="Paste code to classify..."></textarea>
                 <button onclick="predictLanguage()" style="margin-top:8px;">Predict Language</button>
@@ -259,6 +266,13 @@
                 <textarea id="mlQualityInput" placeholder="Paste code to score quality..."></textarea>
                 <button onclick="predictQuality()" style="margin-top:8px;">Predict Quality</button>
                 <div id="mlQualityResult"></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div><div class="card-title">Code Similarity Detector</div><div class="card-subtitle">TF-IDF based duplicate detection</div></div></div>
+                <textarea id="similarityCode1" placeholder="Paste first code sample..." style="margin-bottom:8px;"></textarea>
+                <textarea id="similarityCode2" placeholder="Paste second code sample..."></textarea>
+                <button onclick="checkSimilarity()" style="margin-top:8px;">Check Similarity</button>
+                <div id="similarityResult"></div>
             </div>
             <div class="card">
                 <div class="card-title" style="margin-bottom:8px;">Test Prediction</div>
@@ -496,6 +510,21 @@
             } catch(e) { div.innerHTML = '<p style="color:var(--danger);margin-top:8px;">Failed.</p>'; }
         }
         
+        async function checkSimilarity() {
+            const code1 = document.getElementById('similarityCode1').value;
+            const code2 = document.getElementById('similarityCode2').value;
+            const div = document.getElementById('similarityResult');
+            if (!code1.trim() || !code2.trim()) { div.innerHTML = '<p style="color:var(--text-secondary);margin-top:8px;">Paste both code samples.</p>'; return; }
+            try {
+                const res = await fetch(API + '/api/ml/similarity', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code1, code2})});
+                const data = await res.json();
+                const sim = data.similarity;
+                const color = sim > 60 ? 'var(--danger)' : sim > 30 ? 'var(--warning)' : 'var(--success)';
+                const label = sim > 60 ? 'Duplicate detected!' : sim > 30 ? 'Somewhat similar' : 'Different code';
+                div.innerHTML = '<div style="margin-top:8px;padding:12px;background:var(--surface-hover);border-radius:6px;font-size:13px;text-align:center;"><div style="font-size:24px;font-weight:600;color:' + color + ';">' + sim + '%</div><div style="margin-top:4px;">' + label + '</div></div>';
+            } catch(e) { div.innerHTML = '<p style="color:var(--danger);margin-top:8px;">Failed.</p>'; }
+        }
+        
         async function predictLanguage() {
             const code = document.getElementById('mlTestInput').value;
             const div = document.getElementById('mlPredictResult');
@@ -653,6 +682,21 @@
                 const score = data.quality_score;
                 const color = score > 70 ? 'var(--success)' : score > 40 ? 'var(--warning)' : 'var(--danger)';
                 div.innerHTML = '<div style="margin-top:8px;padding:12px;background:var(--surface-hover);border-radius:6px;font-size:13px;"><div>Quality Score: <strong style="color:' + color + ';">' + score + '/100</strong></div><div>Label: <strong>' + data.label + '</strong></div><div style="margin-top:4px;">' + data.recommendation + '</div></div>';
+            } catch(e) { div.innerHTML = '<p style="color:var(--danger);margin-top:8px;">Failed.</p>'; }
+        }
+        
+        async function checkSimilarity() {
+            const code1 = document.getElementById('similarityCode1').value;
+            const code2 = document.getElementById('similarityCode2').value;
+            const div = document.getElementById('similarityResult');
+            if (!code1.trim() || !code2.trim()) { div.innerHTML = '<p style="color:var(--text-secondary);margin-top:8px;">Paste both code samples.</p>'; return; }
+            try {
+                const res = await fetch(API + '/api/ml/similarity', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code1, code2})});
+                const data = await res.json();
+                const sim = data.similarity;
+                const color = sim > 60 ? 'var(--danger)' : sim > 30 ? 'var(--warning)' : 'var(--success)';
+                const label = sim > 60 ? 'Duplicate detected!' : sim > 30 ? 'Somewhat similar' : 'Different code';
+                div.innerHTML = '<div style="margin-top:8px;padding:12px;background:var(--surface-hover);border-radius:6px;font-size:13px;text-align:center;"><div style="font-size:24px;font-weight:600;color:' + color + ';">' + sim + '%</div><div style="margin-top:4px;">' + label + '</div></div>';
             } catch(e) { div.innerHTML = '<p style="color:var(--danger);margin-top:8px;">Failed.</p>'; }
         }
         

@@ -217,8 +217,48 @@
             <h2 class="page-title">Machine Learning Models</h2>
             <p class="page-subtitle">Custom-trained models for code intelligence</p>
             <div class="card">
+                <div class="card-header"><div><div class="card-title">Analyze Repository Files</div><div class="card-subtitle">ML-powered language classification per file</div></div></div>
+                <select id="mlRepoSelect"><option value="">Select repository...</option></select>
+                <button onclick="analyzeRepoML()" style="margin-top:8px;">Analyze Files</button>
+                <div id="mlAnalysisResult"></div>
+            </div>
+            <div class="card">
                 <div class="card-header"><div><div class="card-title">Language Classifier</div><div class="card-subtitle">Detects programming language from code structure</div></div><button onclick="trainModel()">Train Model</button></div>
                 <div id="mlTrainResult"></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div><div class="card-title">Quality Predictor</div><div class="card-subtitle">ML model that scores code quality</div></div><button onclick="trainQualityModel()">Train Quality Model</button></div>
+                <div id="mlQualityTrainResult"></div>
+            </div>
+            <div class="card">
+                <div class="card-title" style="margin-bottom:8px;">Test Quality</div>
+                <textarea id="mlQualityInput" placeholder="Paste code to score quality..."></textarea>
+                <button onclick="predictQuality()" style="margin-top:8px;">Predict Quality</button>
+                <div id="mlQualityResult"></div>
+            </div>
+            <div class="card">
+                <div class="card-title" style="margin-bottom:8px;">Test Prediction</div>
+                <textarea id="mlTestInput" placeholder="Paste code to classify..."></textarea>
+                <button onclick="predictLanguage()" style="margin-top:8px;">Predict Language</button>
+                <div id="mlPredictResult"></div>
+            </div>
+        </div>
+        <div style="display:none;">
+            <h2 class="page-title">Machine Learning Models</h2>
+            <p class="page-subtitle">Custom-trained models for code intelligence</p>
+            <div class="card">
+                <div class="card-header"><div><div class="card-title">Language Classifier</div><div class="card-subtitle">Detects programming language from code structure</div></div><button onclick="trainModel()">Train Model</button></div>
+                <div id="mlTrainResult"></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div><div class="card-title">Quality Predictor</div><div class="card-subtitle">ML model that scores code quality</div></div><button onclick="trainQualityModel()">Train Quality Model</button></div>
+                <div id="mlQualityTrainResult"></div>
+            </div>
+            <div class="card">
+                <div class="card-title" style="margin-bottom:8px;">Test Quality</div>
+                <textarea id="mlQualityInput" placeholder="Paste code to score quality..."></textarea>
+                <button onclick="predictQuality()" style="margin-top:8px;">Predict Quality</button>
+                <div id="mlQualityResult"></div>
             </div>
             <div class="card">
                 <div class="card-title" style="margin-bottom:8px;">Test Prediction</div>
@@ -347,6 +387,8 @@
                 const opts = repoCache.map(r => '<option value="' + r.id + '">' + (r.name||r.github_url) + '</option>').join('');
                 document.getElementById('compareRepo1').innerHTML = '<option value="">Select repository...</option>' + opts;
                 document.getElementById('compareRepo2').innerHTML = '<option value="">Select repository...</option>' + opts;
+                document.getElementById('mlRepoSelect').innerHTML = '<option value="">Select repository...</option>' + opts;
+                document.getElementById('compareRepo2').innerHTML = '<option value="">Select repository...</option>' + opts;
             } catch(e) {}
         }
         
@@ -373,6 +415,45 @@
             document.getElementById('issueDescription').value = '';
         }
         
+        async function analyzeRepoML() {
+            const repoId = document.getElementById('mlRepoSelect').value;
+            const div = document.getElementById('mlAnalysisResult');
+            if (!repoId) { div.innerHTML = '<p style="color:var(--text-secondary);">Select a repository first.</p>'; return; }
+            div.innerHTML = '<p style="color:var(--text-secondary);">Analyzing files with ML model...</p>';
+            try {
+                const res = await fetch(API + '/api/repositories/' + repoId + '/ml-analysis');
+                const data = await res.json();
+                
+                let langStatsHtml = '<div style="margin-top:12px;margin-bottom:16px;"><div class="card-title" style="margin-bottom:8px;">Language Statistics</div><div class="metrics-grid">';
+                for (const [lang, stats] of Object.entries(data.language_stats)) {
+                    langStatsHtml += '<div class="metric-box"><div class="metric-value">' + stats.files + '</div><div class="metric-label">' + lang + ' files</div></div>';
+                    langStatsHtml += '<div class="metric-box"><div class="metric-value">' + stats.lines.toLocaleString() + '</div><div class="metric-label">' + lang + ' lines</div></div>';
+                }
+                langStatsHtml += '</div></div>';
+                
+                let filesHtml = '<div class="card-title" style="margin-bottom:8px;">Per-File Analysis</div>';
+                data.files.forEach(f => {
+                    const qScore = f.quality_score;
+                    const qClass = qScore > 70 ? 'score-good' : qScore > 40 ? 'score-medium' : 'score-bad';
+                    filesHtml += '<div style="border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px;">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+                            '<strong style="font-size:13px;">' + f.file_path + '</strong>' +
+                            '<div style="display:flex;gap:8px;align-items:center;">' +
+                                '<span style="font-size:11px;padding:2px 8px;background:var(--surface-hover);border-radius:4px;">' + f.predicted_language + '</span>' +
+                                '<span style="font-size:11px;">' + f.confidence + '%</span>' +
+                                '<span style="font-size:11px;padding:2px 8px;border-radius:4px;" class="' + qClass + '">Quality: ' + qScore + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">' + f.lines + ' lines</div>' +
+                    '</div>';
+                });
+                
+                div.innerHTML = langStatsHtml + filesHtml;
+            } catch(e) {
+                div.innerHTML = '<p style="color:var(--danger);">Analysis failed. Make sure the model is trained.</p>';
+            }
+        }
+        
         async function trainModel() {
             const div = document.getElementById('mlTrainResult');
             div.innerHTML = '<p style="color:var(--text-secondary);">Training model...</p>';
@@ -381,6 +462,38 @@
                 const data = await res.json();
                 div.innerHTML = '<div style="margin-top:8px;font-size:13px;"><div>Status: <strong style="color:var(--success);">' + data.status + '</strong></div><div>Accuracy: <strong>' + data.accuracy + '%</strong></div><div>Training Samples: ' + data.training_samples + '</div><div>Test Samples: ' + data.test_samples + '</div></div>';
             } catch(e) { div.innerHTML = '<p style="color:var(--danger);">Training failed.</p>'; }
+        }
+        
+        async function trainQualityModel() {
+            const div = document.getElementById('mlQualityTrainResult');
+            div.innerHTML = '<p style="color:var(--text-secondary);">Training...</p>';
+            try {
+                const res = await fetch(API + '/api/ml/train-quality', {method:'POST'});
+                const data = await res.json();
+                let featuresHtml = '';
+                if (data.top_features) {
+                    featuresHtml = '<div style="margin-top:8px;"><strong>Top Features:</strong><br>';
+                    data.top_features.forEach(f => {
+                        featuresHtml += f.feature + ': ' + f.importance + '%<br>';
+                    });
+                    featuresHtml += '</div>';
+                }
+                div.innerHTML = '<div style="font-size:13px;margin-top:8px;">Accuracy: <strong>' + data.accuracy + '%</strong>' + featuresHtml + '</div>';
+            } catch(e) { div.innerHTML = '<p style="color:var(--danger);">Failed.</p>'; }
+        }
+        
+        async function predictQuality() {
+            const code = document.getElementById('mlQualityInput').value;
+            const div = document.getElementById('mlQualityResult');
+            if (!code.trim()) return;
+            try {
+                const res = await fetch(API + '/api/ml/predict-quality', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code})});
+                const data = await res.json();
+                if (data.error) { div.innerHTML = '<p style="color:var(--danger);margin-top:8px;">' + data.error + '</p>'; return; }
+                const score = data.quality_score;
+                const color = score > 70 ? 'var(--success)' : score > 40 ? 'var(--warning)' : 'var(--danger)';
+                div.innerHTML = '<div style="margin-top:8px;padding:12px;background:var(--surface-hover);border-radius:6px;font-size:13px;"><div>Quality Score: <strong style="color:' + color + ';">' + score + '/100</strong></div><div>Label: <strong>' + data.label + '</strong></div><div style="margin-top:4px;">' + data.recommendation + '</div></div>';
+            } catch(e) { div.innerHTML = '<p style="color:var(--danger);margin-top:8px;">Failed.</p>'; }
         }
         
         async function predictLanguage() {
@@ -462,6 +575,45 @@
             document.getElementById('issueDescription').value = '';
         }
         
+        async function analyzeRepoML() {
+            const repoId = document.getElementById('mlRepoSelect').value;
+            const div = document.getElementById('mlAnalysisResult');
+            if (!repoId) { div.innerHTML = '<p style="color:var(--text-secondary);">Select a repository first.</p>'; return; }
+            div.innerHTML = '<p style="color:var(--text-secondary);">Analyzing files with ML model...</p>';
+            try {
+                const res = await fetch(API + '/api/repositories/' + repoId + '/ml-analysis');
+                const data = await res.json();
+                
+                let langStatsHtml = '<div style="margin-top:12px;margin-bottom:16px;"><div class="card-title" style="margin-bottom:8px;">Language Statistics</div><div class="metrics-grid">';
+                for (const [lang, stats] of Object.entries(data.language_stats)) {
+                    langStatsHtml += '<div class="metric-box"><div class="metric-value">' + stats.files + '</div><div class="metric-label">' + lang + ' files</div></div>';
+                    langStatsHtml += '<div class="metric-box"><div class="metric-value">' + stats.lines.toLocaleString() + '</div><div class="metric-label">' + lang + ' lines</div></div>';
+                }
+                langStatsHtml += '</div></div>';
+                
+                let filesHtml = '<div class="card-title" style="margin-bottom:8px;">Per-File Analysis</div>';
+                data.files.forEach(f => {
+                    const qScore = f.quality_score;
+                    const qClass = qScore > 70 ? 'score-good' : qScore > 40 ? 'score-medium' : 'score-bad';
+                    filesHtml += '<div style="border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px;">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+                            '<strong style="font-size:13px;">' + f.file_path + '</strong>' +
+                            '<div style="display:flex;gap:8px;align-items:center;">' +
+                                '<span style="font-size:11px;padding:2px 8px;background:var(--surface-hover);border-radius:4px;">' + f.predicted_language + '</span>' +
+                                '<span style="font-size:11px;">' + f.confidence + '%</span>' +
+                                '<span style="font-size:11px;padding:2px 8px;border-radius:4px;" class="' + qClass + '">Quality: ' + qScore + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">' + f.lines + ' lines</div>' +
+                    '</div>';
+                });
+                
+                div.innerHTML = langStatsHtml + filesHtml;
+            } catch(e) {
+                div.innerHTML = '<p style="color:var(--danger);">Analysis failed. Make sure the model is trained.</p>';
+            }
+        }
+        
         async function trainModel() {
             const div = document.getElementById('mlTrainResult');
             div.innerHTML = '<p style="color:var(--text-secondary);">Training model...</p>';
@@ -470,6 +622,38 @@
                 const data = await res.json();
                 div.innerHTML = '<div style="margin-top:8px;font-size:13px;"><div>Status: <strong style="color:var(--success);">' + data.status + '</strong></div><div>Accuracy: <strong>' + data.accuracy + '%</strong></div><div>Training Samples: ' + data.training_samples + '</div><div>Test Samples: ' + data.test_samples + '</div></div>';
             } catch(e) { div.innerHTML = '<p style="color:var(--danger);">Training failed.</p>'; }
+        }
+        
+        async function trainQualityModel() {
+            const div = document.getElementById('mlQualityTrainResult');
+            div.innerHTML = '<p style="color:var(--text-secondary);">Training...</p>';
+            try {
+                const res = await fetch(API + '/api/ml/train-quality', {method:'POST'});
+                const data = await res.json();
+                let featuresHtml = '';
+                if (data.top_features) {
+                    featuresHtml = '<div style="margin-top:8px;"><strong>Top Features:</strong><br>';
+                    data.top_features.forEach(f => {
+                        featuresHtml += f.feature + ': ' + f.importance + '%<br>';
+                    });
+                    featuresHtml += '</div>';
+                }
+                div.innerHTML = '<div style="font-size:13px;margin-top:8px;">Accuracy: <strong>' + data.accuracy + '%</strong>' + featuresHtml + '</div>';
+            } catch(e) { div.innerHTML = '<p style="color:var(--danger);">Failed.</p>'; }
+        }
+        
+        async function predictQuality() {
+            const code = document.getElementById('mlQualityInput').value;
+            const div = document.getElementById('mlQualityResult');
+            if (!code.trim()) return;
+            try {
+                const res = await fetch(API + '/api/ml/predict-quality', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code})});
+                const data = await res.json();
+                if (data.error) { div.innerHTML = '<p style="color:var(--danger);margin-top:8px;">' + data.error + '</p>'; return; }
+                const score = data.quality_score;
+                const color = score > 70 ? 'var(--success)' : score > 40 ? 'var(--warning)' : 'var(--danger)';
+                div.innerHTML = '<div style="margin-top:8px;padding:12px;background:var(--surface-hover);border-radius:6px;font-size:13px;"><div>Quality Score: <strong style="color:' + color + ';">' + score + '/100</strong></div><div>Label: <strong>' + data.label + '</strong></div><div style="margin-top:4px;">' + data.recommendation + '</div></div>';
+            } catch(e) { div.innerHTML = '<p style="color:var(--danger);margin-top:8px;">Failed.</p>'; }
         }
         
         async function predictLanguage() {

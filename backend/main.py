@@ -980,6 +980,22 @@ async def get_ml_analysis(repo_id: int):
         'files': file_analysis
     }
 
+
+@app.post("/api/ml/train-quality")
+async def train_quality_model():
+    ml = CodeMLService()
+    result = ml.train_quality_model()
+    return {"status": "success", **result}
+
+@app.post("/api/ml/predict-quality")
+async def predict_quality(request: dict):
+    code = request.get('code', '')
+    if not code:
+        raise HTTPException(status_code=400, detail="Code required")
+    ml = CodeMLService()
+    result = ml.predict_quality(code)
+    return result
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

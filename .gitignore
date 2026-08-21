@@ -30,3 +30,6 @@ simple_backend.py
 enhanced_backend.py
 fixed_backend.py
 ai_backend.py
+
+.env
+backend/.env

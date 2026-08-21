@@ -11,6 +11,7 @@ import logging
 from typing import Dict, List, Optional
 from datetime import datetime
 from gemini_service import GeminiAIService
+from ml_service import CodeMLService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -896,6 +897,88 @@ Be thorough and provide complete, working code when asked."""
     
     response = ai.chat(system_prompt, prompt, max_tokens=2000)
     return {"response": response, "mode": mode}
+
+
+# ============ ML ENDPOINTS ============
+@app.post("/api/ml/train")
+async def train_model():
+    ml = CodeMLService()
+    code_samples, languages = ml.get_sample_training_data()
+    result = ml.train_language_classifier(code_samples, languages)
+    return {"status": "success", "message": "Model trained successfully", **result}
+
+@app.post("/api/ml/predict-language")
+async def predict_language(request: dict):
+    code = request.get('code', '')
+    if not code:
+        raise HTTPException(status_code=400, detail="Code required")
+    ml = CodeMLService()
+    result = ml.predict_language(code)
+    return result
+
+@app.get("/api/ml/status")
+async def ml_status():
+    import os
+    model_file = os.path.join('ml_models', 'language_classifier.pkl')
+    return {"trained": os.path.exists(model_file), "model_path": model_file}
+
+
+@app.get("/api/repositories/{repo_id}/ml-analysis")
+async def get_ml_analysis(repo_id: int):
+    conn = sqlite3.connect('devpilot.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM repositories WHERE id=?", (repo_id,))
+    repo = cursor.fetchone()
+    conn.close()
+    
+    if not repo:
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    repo = dict(repo)
+    github = GitHubService()
+    ml = CodeMLService()
+    
+    files = github.get_files(repo['github_url'])
+    code_files = [f for f in files if f.endswith(('.py','.js','.ts','.html','.css','.json','.md','.txt','.xml','.yaml','.yml'))][:100]
+    
+    file_analysis = []
+    language_stats = {}
+    
+    for file_path in code_files:
+        content = github.get_file_content(repo['github_url'], file_path)
+        if content:
+            # ML prediction
+            prediction = ml.predict_language(content)
+            predicted_lang = prediction.get('predicted_language', 'unknown')
+            confidence = prediction.get('confidence', 0)
+            
+            # Count lines
+            lines = len(content.splitlines())
+            
+            # Quality score (simple heuristic + ML confidence)
+            quality = 100 if confidence > 80 else (60 if confidence > 50 else 30)
+            
+            # Track language stats
+            if predicted_lang not in language_stats:
+                language_stats[predicted_lang] = {'files': 0, 'lines': 0}
+            language_stats[predicted_lang]['files'] += 1
+            language_stats[predicted_lang]['lines'] += lines
+            
+            file_analysis.append({
+                'file_path': file_path,
+                'predicted_language': predicted_lang,
+                'confidence': confidence,
+                'lines': lines,
+                'quality_score': quality,
+            })
+    
+    return {
+        'repository': repo['name'],
+        'total_files_analyzed': len(file_analysis),
+        'language_stats': language_stats,
+        'files': file_analysis
+    }
 
 if __name__ == "__main__":
     import uvicorn

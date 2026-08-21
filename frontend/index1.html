@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevPilot - AI Developer Intelligence</title>
+    <style>
+        :root { --bg:#f8fafc; --card:#fff; --sidebar:#fff; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; --primary:#6366f1; }
+        [data-theme="dark"] { --bg:#0f172a; --card:#1e293b; --sidebar:#0f172a; --border:#334155; --text:#f1f5f9; --muted:#94a3b8; --primary:#818cf8; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--text); display:flex; min-height:100vh; }
+        .sidebar { width:220px; background:var(--sidebar); padding:20px 0; position:fixed; height:100vh; border-right:1px solid var(--border); display:flex; flex-direction:column; z-index:100; }
+        .sidebar-logo { display:flex; align-items:center; gap:10px; padding:0 20px 20px; border-bottom:1px solid var(--border); margin-bottom:16px; }
+        .logo-icon { width:36px; height:36px; background:linear-gradient(135deg,#6366f1,#ec4899); border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:18px; color:white; }
+        .sidebar-logo span { font-size:20px; font-weight:bold; }
+        .nav-item { display:flex; align-items:center; gap:10px; padding:12px 20px; cursor:pointer; font-size:14px; color:var(--muted); transition:all 0.2s; margin:2px 10px; border-radius:8px; }
+        .nav-item:hover { background:rgba(99,102,241,0.1); color:var(--text); }
+        .nav-item.active { background:rgba(99,102,241,0.15); color:var(--primary); font-weight:600; }
+        .theme-btn { margin-top:auto; padding:12px 20px; cursor:pointer; color:var(--muted); font-size:14px; display:flex; align-items:center; gap:10px; border-top:1px solid var(--border); }
+        .theme-btn:hover { color:var(--primary); }
+        .main { margin-left:220px; flex:1; padding:24px; }
+        .page { display:none; }
+        .page.active { display:block; }
+        .page-title { font-size:24px; font-weight:bold; margin-bottom:20px; }
+        .card { background:var(--card); border-radius:12px; padding:20px; margin-bottom:16px; border:1px solid var(--border); }
+        .card h3 { margin-bottom:12px; color:var(--primary); font-size:15px; }
+        input, textarea, select { width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font-size:14px; margin-bottom:8px; }
+        input:focus, textarea:focus, select:focus { outline:none; border-color:var(--primary); }
+        textarea { font-family:monospace; min-height:80px; resize:vertical; }
+        button { padding:10px 18px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px; }
+        button:hover { opacity:0.9; }
+        .btn-danger { background:#dc2626; padding:4px 10px; font-size:11px; }
+        .btn-success { background:#059669; padding:4px 10px; font-size:11px; }
+        .repo-card { border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; }
+        .repo-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px; }
+        .repo-name { font-weight:600; font-size:14px; }
+        .repo-actions { display:flex; gap:6px; align-items:center; }
+        .status { padding:3px 10px; border-radius:20px; font-size:10px; text-transform:uppercase; font-weight:700; }
+        .completed { background:#d1fae5; color:#065f46; }
+        .analyzing { background:#dbeafe; color:#1e40af; }
+        .pending { background:#fef3c7; color:#92400e; }
+        .metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(90px,1fr)); gap:8px; margin-top:10px; }
+        .metric-box { background:var(--bg); padding:10px; border-radius:6px; text-align:center; }
+        .metric-value { font-size:16px; font-weight:bold; color:var(--primary); }
+        .metric-label { font-size:10px; color:var(--muted); }
+        .chat-bot-btn { position:fixed; bottom:20px; right:20px; width:60px; height:60px; background:linear-gradient(135deg,#6366f1,#ec4899); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:28px; z-index:1000; animation:pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(99,102,241,0.5); } 50% { box-shadow:0 0 0 15px rgba(99,102,241,0); } }
+        .chat-window { position:fixed; bottom:90px; right:20px; width:350px; height:450px; background:var(--card); border:1px solid var(--border); border-radius:16px; display:none; flex-direction:column; z-index:999; overflow:hidden; }
+        .chat-window.open { display:flex; }
+        .chat-header { background:linear-gradient(135deg,#6366f1,#ec4899); padding:15px; font-weight:bold; color:white; display:flex; justify-content:space-between; }
+        .chat-messages { flex:1; overflow-y:auto; padding:15px; }
+        .chat-msg { padding:10px; border-radius:10px; margin-bottom:8px; font-size:13px; max-width:85%; }
+        .user-msg { background:var(--primary); color:white; margin-left:auto; }
+        .ai-msg { background:var(--bg); color:var(--text); }
+        .chat-input-area { display:flex; gap:8px; padding:10px; border-top:1px solid var(--border); }
+        .chat-input-area input { flex:1; margin:0; }
+    </style>
+</head>
+<body data-theme="dark">
+    <div class="sidebar">
+        <div class="sidebar-logo"><div class="logo-icon">D</div><span>DevPilot</span></div>
+        <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></div>
+        <div class="nav-item" data-page="history" onclick="switchPage('history')">📜 <span>History</span></div>
+        <div class="nav-item" data-page="compare" onclick="switchPage('compare')">⚖️ <span>Compare</span></div>
+        <div class="nav-item" data-page="security" onclick="switchPage('security')">🔒 <span>Security</span></div>
+        <div class="nav-item" data-page="reports" onclick="switchPage('reports')">📄 <span>Reports</span></div>
+        <div class="nav-item" data-page="ai" onclick="switchPage('ai')">🤖 <span>AI Tools</span></div>
+        <div class="theme-btn" onclick="toggleTheme()">🌙 <span>Dark Mode</span></div>
+    </div>
+    <div class="main">
+        <div class="page active" id="page-dashboard">
+            <h2 class="page-title">📊 Dashboard</h2>
+            <div class="card"><h3>Analyze New Repository</h3><div style="display:flex;gap:8px;"><input type="url" id="repoUrl" placeholder="GitHub URL" style="flex:1;"><button onclick="addRepo()">Analyze</button></div><div id="message"></div></div>
+            <div class="card"><h3>Recent Repositories</h3><div id="recentRepos"><p style="color:var(--muted);">Loading...</p></div></div>
+            <div class="card"><h3>Quick Stats</h3><div id="quickStats"></div></div>
+        </div>
+        <div class="page" id="page-history">
+            <h2 class="page-title">📜 History</h2>
+            <div class="card"><div id="historyList"><p style="color:var(--muted);">Loading...</p></div></div>
+        </div>
+        <div class="page" id="page-compare">
+            <h2 class="page-title">⚖️ Compare</h2>
+            <div class="card"><select id="compareRepo1"><option value="">Select repo 1...</option></select><select id="compareRepo2"><option value="">Select repo 2...</option></select><button onclick="compareRepos()" style="margin-top:8px;">Compare</button><div id="compareResult"></div></div>
+        </div>
+        <div class="page" id="page-security">
+            <h2 class="page-title">🔒 Security Scanner</h2>
+            <div class="card"><textarea id="securityCodeInput" placeholder="Paste code to scan..."></textarea><button onclick="scanSecurity()" style="margin-top:8px;">Scan</button><div id="securityResult"></div></div>
+        </div>
+        <div class="page" id="page-reports">
+            <h2 class="page-title">📄 Reports</h2>
+            <div class="card"><h3>Report Categories</h3><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><button onclick="showReport('analysis')">📊 Analysis</button><button onclick="showReport('statistics')">📈 Statistics</button><button onclick="showReport('comparison')">⚖️ Comparison</button></div><div id="reportContent"><p style="color:var(--muted);">Select a report type.</p></div></div>
+        </div>
+        <div class="page" id="page-ai">
+            <h2 class="page-title">🤖 AI Tools</h2>
+            <div class="card"><h3>Summarize</h3><textarea id="aiSummarizeInput" placeholder="Paste code..."></textarea><button onclick="aiSummarize()" style="margin-top:8px;">Summarize</button><div id="aiSummarizeResult"></div></div>
+            <div class="card"><h3>Improve</h3><textarea id="aiImproveInput" placeholder="Paste code..."></textarea><input type="text" id="aiImproveInstruction" placeholder="Instruction (optional)"><button onclick="aiImprove()" style="margin-top:8px;">Improve</button><div id="aiImproveResult"></div></div>
+            <div class="card"><h3>Generate</h3><textarea id="aiGenerateInput" placeholder="Describe code..."></textarea><button onclick="aiGenerate()" style="margin-top:8px;">Generate</button><div id="aiGenerateResult"></div></div>
+        </div>
+    </div>
+    <div class="chat-bot-btn" onclick="toggleChat()">🤖</div>
+    <div class="chat-window" id="chatWindow">
+        <div class="chat-header">DevPilot AI <span onclick="toggleChat()" style="cursor:pointer;">✕</span></div>
+        <div class="chat-messages" id="chatMessages"><div class="chat-msg ai-msg">Hi! Ask me anything!</div></div>
+        <div class="chat-input-area"><input type="text" id="chatInput" placeholder="Type..." onkeypress="if(event.key==='Enter')sendChat()"><button onclick="sendChat()">Send</button></div>
+    </div>
+    <script>
+        const API = 'http://localhost:8000';
+        let repoCache = [];
+        
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.querySelector('.theme-btn span');
+            if (body.getAttribute('data-theme') === 'dark') { body.setAttribute('data-theme', 'light'); btn.textContent = 'Light Mode'; }
+            else { body.setAttribute('data-theme', 'dark'); btn.textContent = 'Dark Mode'; }
+        }
+        
+        function switchPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelector('.nav-item[data-page="' + page + '"]').classList.add('active');
+        }
+        
+        function toggleChat() {
+            document.getElementById('chatWindow').classList.toggle('open');
+        }
+        
+        async function sendChat() {
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+            const msgs = document.getElementById('chatMessages');
+            msgs.innerHTML += '<div class="chat-msg user-msg">' + msg + '</div>';
+            input.value = '';
+            msgs.innerHTML += '<div class="chat-msg ai-msg">Thinking...</div>';
+            msgs.scrollTop = msgs.scrollHeight;
+            try {
+                const res = await fetch(API + '/api/ai/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:msg})});
+                const data = await res.json();
+                msgs.innerHTML = msgs.innerHTML.replace('Thinking...', '');
+                msgs.innerHTML += '<div class="chat-msg ai-msg">' + data.response.replace(/\n/g, '<br>') + '</div>';
+                msgs.scrollTop = msgs.scrollHeight;
+            } catch(e) { msgs.innerHTML += '<div class="chat-msg ai-msg">Error.</div>'; }
+        }
+        
+        async function loadRepos() {
+            try {
+                const res = await fetch(API + '/api/repositories');
+                const repos = await res.json();
+                repoCache = repos || [];
+                
+                const renderRepos = (elementId) => {
+                    const el = document.getElementById(elementId);
+                    if (!el) return;
+                    if (!repoCache || repoCache.length === 0) { el.innerHTML = '<p style="color:var(--muted);">No repositories.</p>'; return; }
+                    el.innerHTML = repoCache.map(r => {
+                        const d = r.documentation_score || 0, q = r.code_quality_score || 0, s = r.security_score || 0;
+                        return '<div class="repo-card"><div class="repo-header"><span class="repo-name">' + (r.name||r.github_url) + '</span><div class="repo-actions"><span class="status ' + r.status + '">' + r.status + '</span><button class="btn-success" onclick="viewReport(' + r.id + ')">Report</button><button class="btn-danger" onclick="deleteRepo(' + r.id + ')">Delete</button></div></div><div style="font-size:12px;color:var(--muted);">' + r.github_url + '</div>' + (r.status === 'completed' && r.total_files > 0 ? '<div class="metrics-grid"><div class="metric-box"><div class="metric-value">' + r.total_files + '</div><div class="metric-label">Files</div></div><div class="metric-box"><div class="metric-value">' + r.total_lines.toLocaleString() + '</div><div class="metric-label">Lines</div></div><div class="metric-box"><div class="metric-value">' + d + '%</div><div class="metric-label">Docs</div></div><div class="metric-box"><div class="metric-value">' + q + '%</div><div class="metric-label">Quality</div></div><div class="metric-box"><div class="metric-value">' + s + '%</div><div class="metric-label">Security</div></div></div>' : '') + '</div>';
+                    }).join('');
+                };
+                
+                renderRepos('recentRepos');
+                renderRepos('historyList');
+                
+                const options = repoCache.map(r => '<option value="' + r.id + '">' + (r.name||r.github_url) + '</option>').join('');
+                document.getElementById('compareRepo1').innerHTML = '<option value="">Select repo 1...</option>' + options;
+                document.getElementById('compareRepo2').innerHTML = '<option value="">Select repo 2...</option>' + options;
+            } catch(e) { console.error('loadRepos error:', e); }
+        }
+        
+        async function loadStats() {
+            try {
+                const res = await fetch(API + '/api/stats');
+                const s = await res.json();
+                document.getElementById('quickStats').innerHTML = '<div class="metrics-grid"><div class="metric-box"><div class="metric-value">' + s.total_repositories + '</div><div class="metric-label">Repos</div></div><div class="metric-box"><div class="metric-value">' + s.completed + '</div><div class="metric-label">Done</div></div><div class="metric-box"><div class="metric-value">' + s.average_quality_score + '%</div><div class="metric-label">Quality</div></div><div class="metric-box"><div class="metric-value">' + s.total_lines_analyzed.toLocaleString() + '</div><div class="metric-label">Lines</div></div></div>';
+            } catch(e) { console.error('loadStats error:', e); }
+        }
+        
+        async function addRepo() {
+            const url = document.getElementById('repoUrl').value.trim();
+            if (!url) return;
+            try {
+                await fetch(API + '/api/repositories', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({github_url:url})});
+                document.getElementById('message').innerHTML = '<p style="color:#059669;">Added!</p>';
+                document.getElementById('repoUrl').value = '';
+                loadRepos(); loadStats();
+            } catch(e) { document.getElementById('message').innerHTML = '<p style="color:#dc2626;">Failed.</p>'; }
+        }
+        
+        async function deleteRepo(id) {
+            if (!confirm('Delete?')) return;
+            await fetch(API + '/api/repositories/' + id, {method:'DELETE'});
+            loadRepos(); loadStats();
+        }
+        
+        function viewReport(id) {
+            window.open('report.html?type=analysis&id=' + id, '_blank');
+        }
+        
+        async function compareRepos() {
+            const id1 = document.getElementById('compareRepo1').value;
+            const id2 = document.getElementById('compareRepo2').value;
+            if (!id1 || !id2) return;
+            const r1 = repoCache.find(r => r.id == id1);
+            const r2 = repoCache.find(r => r.id == id2);
+            if (!r1 || !r2) return;
+            try {
+                const res = await fetch(API + '/api/compare', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({repo1_url:r1.github_url, repo2_url:r2.github_url})});
+                const data = await res.json();
+                const fields = ['total_files','total_lines','total_functions','documentation_score','code_quality_score','security_score'];
+                const labels = {'total_files':'Files','total_lines':'Lines','total_functions':'Functions','documentation_score':'Docs','code_quality_score':'Quality','security_score':'Security'};
+                let html = '<div style="margin-top:12px;"><strong>' + data.repo1.name + ' vs ' + data.repo2.name + '</strong></div>';
+                fields.forEach(f => { const c = data.comparison[f]; html += '<div style="display:flex;justify-content:space-between;padding:8px;font-size:13px;border-bottom:1px solid var(--border);"><span>' + labels[f] + '</span><span>' + c.repo1 + ' vs ' + c.repo2 + '</span></div>'; });
+                document.getElementById('compareResult').innerHTML = html;
+            } catch(e) { document.getElementById('compareResult').innerHTML = '<p style="color:#dc2626;">Failed.</p>'; }
+        }
+        
+        async function scanSecurity() {
+            const code = document.getElementById('securityCodeInput').value;
+            if (!code.trim()) return;
+            try {
+                const res = await fetch(API + '/api/analyze-code', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code, language:'Python'})});
+                const data = await res.json();
+                if (!data.has_issues) { document.getElementById('securityResult').innerHTML = '<p style="color:#059669;">No issues!</p>'; return; }
+                document.getElementById('securityResult').innerHTML = data.security_issues.map(i => '<div style="padding:10px;background:#7f1d1d;border-radius:6px;margin-bottom:6px;font-size:13px;">' + i.type + ' (line ' + i.line + ')</div>').join('');
+            } catch(e) {}
+        }
+        
+        async function showReport(type) {
+            const div = document.getElementById('reportContent');
+            if (type === 'analysis') {
+                const repos = repoCache;
+                if (!repos || repos.length === 0) { div.innerHTML = '<p style="color:var(--muted);">No repos.</p>'; return; }
+                div.innerHTML = '<select id="analysisRepo">' + repos.map(r => '<option value="' + r.id + '">' + (r.name||r.github_url) + '</option>').join('') + '</select><button onclick="viewReport(document.getElementById(\'analysisRepo\').value)" style="margin-top:8px;">View Report</button>';
+            } else if (type === 'statistics') {
+                try {
+                    const s = await fetch(API + '/api/stats').then(r => r.json());
+                    div.innerHTML = '<div style="font-size:13px;line-height:1.8;"><p><strong>Total:</strong> ' + s.total_repositories + '</p><p><strong>Completed:</strong> ' + s.completed + '</p><p><strong>Avg Quality:</strong> ' + s.average_quality_score + '%</p><p><strong>Total Lines:</strong> ' + s.total_lines_analyzed.toLocaleString() + '</p></div>';
+                } catch(e) { div.innerHTML = '<p style="color:#dc2626;">Failed.</p>'; }
+            } else if (type === 'comparison') {
+                const repos = repoCache;
+                if (!repos || repos.length < 2) { div.innerHTML = '<p style="color:var(--muted);">Need 2+ repos.</p>'; return; }
+                div.innerHTML = '<select id="cr1">' + repos.map(r => '<option value="' + r.id + '">' + (r.name||r.github_url) + '</option>').join('') + '</select><select id="cr2">' + repos.map(r => '<option value="' + r.id + '">' + (r.name||r.github_url) + '</option>').join('') + '</select><button onclick="window.open(\'report.html?type=comparison&id=\' + document.getElementById(\'cr1\').value + \'&id2=\' + document.getElementById(\'cr2\').value, \'_blank\')" style="margin-top:8px;">View Comparison</button>';
+            }
+        }
+        
+        async function aiSummarize() {
+            const code = document.getElementById('aiSummarizeInput').value;
+            if (!code.trim()) return;
+            const res = await fetch(API + '/api/ai/summarize-code', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code})});
+            const data = await res.json();
+            document.getElementById('aiSummarizeResult').innerHTML = '<div style="margin-top:10px;padding:12px;background:var(--bg);border-radius:8px;font-size:13px;">' + data.summary.replace(/\n/g, '<br>') + '</div>';
+        }
+        
+        async function aiImprove() {
+            const code = document.getElementById('aiImproveInput').value;
+            const instruction = document.getElementById('aiImproveInstruction').value;
+            if (!code.trim()) return;
+            const res = await fetch(API + '/api/ai/improve-code', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code, instruction})});
+            const data = await res.json();
+            document.getElementById('aiImproveResult').innerHTML = '<div style="margin-top:10px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;white-space:pre-wrap;">' + data.improved_code + '</div>';
+        }
+        
+        async function aiGenerate() {
+            const desc = document.getElementById('aiGenerateInput').value;
+            if (!desc.trim()) return;
+            const res = await fetch(API + '/api/ai/generate-code', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({description:desc})});
+            const data = await res.json();
+            document.getElementById('aiGenerateResult').innerHTML = '<div style="margin-top:10px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;white-space:pre-wrap;">' + data.generated_code + '</div>';
+        }
+        
+        loadRepos();
+        loadStats();
+        setInterval(loadRepos, 10000);
+        setInterval(loadStats, 15000);
+    </script>
+</body>
+</html>

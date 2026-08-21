@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevPilot - Report Preview</title>
+    <style>
+        :root { --bg:#f8fafc; --card:#fff; --text:#0f172a; --muted:#64748b; --primary:#6366f1; --border:#e2e8f0; }
+        [data-theme="dark"] { --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --primary:#818cf8; --border:#334155; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+        .header { background:var(--card); padding:20px 30px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); }
+        .header h1 { font-size:22px; background:linear-gradient(135deg,#6366f1,#ec4899); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+        .container { max-width:900px; margin:30px auto; padding:0 20px; }
+        .card { background:var(--card); border-radius:16px; padding:30px; margin-bottom:20px; border:1px solid var(--border); box-shadow:0 2px 10px rgba(0,0,0,0.05); }
+        .card h2 { font-size:18px; margin-bottom:16px; color:var(--primary); border-bottom:2px solid var(--primary); padding-bottom:8px; }
+        table { width:100%; border-collapse:collapse; margin:12px 0; }
+        th, td { padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); font-size:14px; }
+        th { background:var(--bg); font-weight:600; }
+        .score-good { color:#059669; font-weight:700; }
+        .score-medium { color:#d97706; font-weight:700; }
+        .score-bad { color:#dc2626; font-weight:700; }
+        .issue { padding:12px; border-radius:8px; margin-bottom:8px; border-left:4px solid; }
+        .issue-critical { background:#fee2e2; border-color:#dc2626; }
+        .issue-high { background:#ffedd5; border-color:#ea580c; }
+        .issue-medium { background:#fef3c7; border-color:#d97706; }
+        .issue-low { background:#f3f4f6; border-color:#6b7280; }
+        .download-btns { display:flex; gap:12px; margin-top:20px; flex-wrap:wrap; }
+        .btn { padding:12px 24px; border-radius:10px; color:white; text-decoration:none; font-weight:600; font-size:14px; cursor:pointer; border:none; transition:all 0.3s; }
+        .btn:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.2); }
+        .btn-pdf { background:linear-gradient(135deg,#ef4444,#dc2626); }
+        .btn-word { background:linear-gradient(135deg,#3b82f6,#2563eb); }
+        .btn-json { background:linear-gradient(135deg,#10b981,#059669); }
+        .btn-back { background:linear-gradient(135deg,#6b7280,#4b5563); }
+    </style>
+</head>
+<body data-theme="dark">
+    <div class="header">
+        <h1>📄 DevPilot Report</h1>
+        <button class="btn btn-back" onclick="history.back()">← Back</button>
+    </div>
+    <div class="container" id="reportContent">
+        <p style="text-align:center;color:var(--muted);">Loading report...</p>
+    </div>
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const type = params.get('type');
+        const id = params.get('id');
+        const id2 = params.get('id2');
+        const API = 'http://localhost:8000';
+        
+        function scoreClass(score) { return score > 60 ? 'score-good' : score > 30 ? 'score-medium' : 'score-bad'; }
+        
+        async function loadReport() {
+            const div = document.getElementById('reportContent');
+            let data;
+            
+            if (type === 'analysis' && id) {
+                data = await fetch(API + '/api/reports/analysis/' + id).then(r => r.json());
+                const r = data.repository;
+                div.innerHTML = `
+                    <div class="card">
+                        <h2>📋 Repository Information</h2>
+                        <table>
+                            <tr><th>Name</th><td>${r.name || 'N/A'}</td></tr>
+                            <tr><th>GitHub URL</th><td>${r.github_url}</td></tr>
+                            <tr><th>Description</th><td>${r.description || 'N/A'}</td></tr>
+                            <tr><th>Language</th><td>${r.language || 'N/A'}</td></tr>
+                            <tr><th>Stars</th><td>${r.stars || 0}</td></tr>
+                            <tr><th>Status</th><td>${r.status}</td></tr>
+                        </table>
+                    </div>
+                    <div class="card">
+                        <h2>📊 Code Metrics</h2>
+                        <table>
+                            <tr><th>Total Files</th><td>${r.total_files}</td></tr>
+                            <tr><th>Total Lines</th><td>${r.total_lines.toLocaleString()}</td></tr>
+                            <tr><th>Total Functions</th><td>${r.total_functions}</td></tr>
+                            <tr><th>Total Classes</th><td>${r.total_classes}</td></tr>
+                            <tr><th>Documentation Score</th><td class="${scoreClass(r.documentation_score)}">${r.documentation_score}%</td></tr>
+                            <tr><th>Code Quality Score</th><td class="${scoreClass(r.code_quality_score)}">${r.code_quality_score}%</td></tr>
+                            <tr><th>Security Score</th><td class="${scoreClass(r.security_score)}">${r.security_score}%</td></tr>
+                        </table>
+                    </div>
+                    <div class="card">
+                        <h2>🔒 Security Issues (${data.security_issues.length})</h2>
+                        ${data.security_issues.length === 0 ? '<p style="color:var(--muted);">No issues found.</p>' : data.security_issues.map(i => `
+                            <div class="issue issue-${i.severity}">
+                                <strong>${i.issue_type}</strong> (${i.severity})
+                                <div style="font-size:13px;margin-top:4px;">📁 ${i.file_path || 'N/A'} - Line ${i.line_number || 'N/A'}</div>
+                                <div style="font-size:13px;margin-top:4px;">💡 ${i.recommendation || 'N/A'}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="download-btns">
+                        <a class="btn btn-pdf" href="${API}/api/reports/analysis/${id}/pdf">📕 Download PDF</a>
+                        <a class="btn btn-word" href="${API}/api/reports/analysis/${id}/word">📘 Download Word</a>
+                        <a class="btn btn-json" href="${API}/api/export/${id}/json" target="_blank">📗 View JSON</a>
+                    </div>
+                `;
+            } else if (type === 'statistics') {
+                data = await fetch(API + '/api/reports/statistics').then(r => r.json());
+                div.innerHTML = `
+                    <div class="card">
+                        <h2>📈 Platform Statistics</h2>
+                        <table>
+                            <tr><th>Total Repositories</th><td>${data.total_repositories}</td></tr>
+                            <tr><th>Completed</th><td>${data.completed}</td></tr>
+                            <tr><th>Average Documentation</th><td class="${scoreClass(data.average_documentation)}">${data.average_documentation}%</td></tr>
+                            <tr><th>Average Quality</th><td class="${scoreClass(data.average_quality)}">${data.average_quality}%</td></tr>
+                            <tr><th>Average Security</th><td class="${scoreClass(data.average_security)}">${data.average_security}%</td></tr>
+                            <tr><th>Total Lines Analyzed</th><td>${data.total_lines_analyzed.toLocaleString()}</td></tr>
+                            <tr><th>Total Files Analyzed</th><td>${data.total_files_analyzed}</td></tr>
+                        </table>
+                    </div>
+                `;
+            } else if (type === 'comparison' && id && id2) {
+                data = await fetch(API + '/api/reports/comparison/' + id + '/' + id2).then(r => r.json());
+                const fields = ['total_files','total_lines','total_functions','documentation_score','code_quality_score','security_score'];
+                const labels = {'total_files':'Files','total_lines':'Lines','total_functions':'Functions','documentation_score':'Documentation','code_quality_score':'Quality','security_score':'Security'};
+                div.innerHTML = `
+                    <div class="card">
+                        <h2>⚖️ Comparison: ${data.repo1.name} vs ${data.repo2.name}</h2>
+                        <table>
+                            <tr><th>Metric</th><th>${data.repo1.name}</th><th>${data.repo2.name}</th><th>Winner</th></tr>
+                            ${fields.map(f => `<tr><td>${labels[f]}</td><td>${data.comparison[f].repo1}</td><td>${data.comparison[f].repo2}</td><td>${data.comparison[f].winner === 'tie' ? 'Tie' : data.comparison[f].winner === 'repo1' ? data.repo1.name : data.repo2.name}</td></tr>`).join('')}
+                        </table>
+                    </div>
+                `;
+            } else {
+                div.innerHTML = '<p style="text-align:center;color:var(--muted);">Invalid report parameters.</p>';
+            }
+        }
+        
+        loadReport();
+    </script>
+</body>
+</html>

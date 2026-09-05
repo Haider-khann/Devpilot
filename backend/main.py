@@ -7,7 +7,10 @@ import base64
 import ast
 import re
 import json
+import os
 import logging
+from dotenv import load_dotenv
+load_dotenv()
 from typing import Dict, List, Optional
 from datetime import datetime
 from gemini_service import GeminiAIService
@@ -61,7 +64,11 @@ class CodeAnalysisRequest(BaseModel):
 class GitHubService:
     def __init__(self):
         self.base_url = "https://api.github.com"
-        self.headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "DevPilot"}
+        self.headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "DevPilot",
+            "Authorization": f"Bearer {os.getenv('GITHUB_TOKEN', '')}"
+        }
     
     def parse_url(self, url):
         url = url.rstrip('/').replace('.git', '')

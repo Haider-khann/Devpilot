@@ -346,16 +346,6 @@
     </div>
     
     <script>
-        function sanitize(str) {
-            if (!str) return '';
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-        function safeSetHTML(element, html) {
-            // For trusted HTML only, not user input
-            element.innerHTML = html;
-        }
         const API = 'https://bookish-eureka-694r7v747p7vh47p6-8000.app.github.dev';
         let repoCache = [];
         
@@ -378,10 +368,7 @@
             const msg = input.value.trim();
             if (!msg) return;
             const msgs = document.getElementById('chatMessages');
-            const userMsg = document.createElement('div');
-            userMsg.className = 'chat-msg user-msg';
-            userMsg.textContent = msg;
-            msgs.appendChild(userMsg);
+            msgs.innerHTML += '<div class="chat-msg user-msg">' + msg + '</div>';
             input.value = '';
             msgs.innerHTML += '<div class="chat-msg ai-msg">Thinking...</div>';
             msgs.scrollTop = msgs.scrollHeight;
@@ -390,10 +377,7 @@
                 const res = await fetch(API + '/api/ai/chat-smart', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:msg, mode:mode})});
                 const data = await res.json();
                 msgs.innerHTML = msgs.innerHTML.replace('Thinking...', '');
-                const aiMsg = document.createElement('div');
-            aiMsg.className = 'chat-msg ai-msg';
-            aiMsg.textContent = data.response;
-            msgs.appendChild(aiMsg);
+                msgs.innerHTML += '<div class="chat-msg ai-msg">' + data.response.replace(/\n/g, '<br>') + '</div>';
                 msgs.scrollTop = msgs.scrollHeight;
             } catch(e) { msgs.innerHTML += '<div class="chat-msg ai-msg">Error.</div>'; }
         }

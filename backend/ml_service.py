@@ -11,14 +11,18 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 logger = logging.getLogger(__name__)
 
+# Encapsulates feature extraction, model training, and prediction helpers.
 class CodeMLService:
     def __init__(self, model_path='ml_models'):
+        """Create the ML service and ensure its model directory exists."""
         self.model_path = model_path
         os.makedirs(model_path, exist_ok=True)
         self.classifier = None
         self.quality_classifier = None
     
     def extract_features(self, code):
+        """Extract lightweight structural features from a code sample."""
+        # These features support multiple languages without requiring parsers.
         return [
             len(code),
             len(code.splitlines()),
@@ -49,6 +53,8 @@ class CodeMLService:
         ]
     
     def train_language_classifier(self, code_samples, languages):
+        """Train and persist the programming-language classifier."""
+        # Keep a held-out split so the endpoint can report a basic accuracy.
         X = np.array([self.extract_features(c) for c in code_samples])
         y = np.array(languages)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -60,6 +66,7 @@ class CodeMLService:
         return {'accuracy': round(accuracy * 100, 2), 'training_samples': len(X_train), 'test_samples': len(X_test)}
     
     def predict_language(self, code):
+        """Predict a code sample's language using the persisted classifier."""
         model_file = os.path.join(self.model_path, 'language_classifier.pkl')
         if os.path.exists(model_file):
             self.classifier = joblib.load(model_file)
@@ -72,6 +79,8 @@ class CodeMLService:
         return {'predicted_language': prediction, 'confidence': confidence}
     
     def train_quality_model(self):
+        """Train and persist the quality classifier from built-in examples."""
+        # The small embedded dataset keeps model training available locally.
         good = [
             "def calculate_total(items):\n    total = 0\n    for item in items:\n        total += item.price\n    return total",
             "class User:\n    def __init__(self, name):\n        self.name = name\n\n    def greet(self):\n        return f'Hello, {self.name}'",
@@ -116,6 +125,7 @@ class CodeMLService:
         return {'accuracy': round(accuracy * 100, 2), 'training_samples': len(X_train), 'test_samples': len(X_test), 'top_features': [{'feature': f, 'importance': round(i * 100, 2)} for f, i in top]}
     
     def predict_quality(self, code):
+        """Predict code quality and return a score with a recommendation."""
         model_file = os.path.join(self.model_path, 'quality_classifier.pkl')
         if os.path.exists(model_file):
             self.quality_classifier = joblib.load(model_file)
@@ -137,6 +147,7 @@ class CodeMLService:
     
     def find_similar_code(self, code1, code2):
         """Calculate similarity between two code snippets using TF-IDF."""
+        # Character n-grams tolerate small formatting and naming differences.
         vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
         try:
             tfidf = vectorizer.fit_transform([code1, code2])
@@ -147,6 +158,7 @@ class CodeMLService:
     
     def detect_duplicates(self, code_snippets):
         """Find duplicate code among multiple snippets."""
+        # Compare every pair once and report only similarities above the threshold.
         if len(code_snippets) < 2:
             return []
         vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
@@ -161,6 +173,8 @@ class CodeMLService:
         return duplicates
     
     def get_sample_training_data(self):
+        """Return built-in code examples and their language labels."""
+        # Samples cover the languages currently supported by the classifier.
         py = [
             "def hello():\n    print('Hello')\n\nclass MyClass:\n    def method(self):\n        return 1",
             "import os\nimport sys\n\ndef main():\n    for i in range(10):\n        print(i)",

@@ -9,6 +9,7 @@ import re
 import json
 import os
 import logging
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 load_dotenv()
 from typing import Dict, List, Optional
@@ -30,6 +31,7 @@ app.add_middleware(
 )
 
 def init_db():
+    """Initialize the SQLite database with required tables."""
     conn = sqlite3.connect('devpilot.db')
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS repositories (
@@ -63,7 +65,9 @@ class CodeAnalysisRequest(BaseModel):
 
 class GitHubService:
     def __init__(self):
+        """Initialize service with API configuration."""
         self.base_url = "https://api.github.com"
+        self.timeout = 15
         self.headers = {
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "DevPilot",
@@ -71,28 +75,37 @@ class GitHubService:
         }
     
     def parse_url(self, url):
-        url = url.rstrip('/').replace('.git', '')
-        parts = url.split('/')
-        if 'github.com' not in parts:
+        """Parse GitHub URL to owner and repo."""
+        parsed = urlparse(url if '://' in url else f'https://{url}')
+        parts = [part for part in parsed.path.strip('/').split('/') if part]
+        if parsed.netloc.lower() not in {'github.com', 'www.github.com'} or len(parts) < 2:
             raise ValueError("Invalid GitHub URL")
-        idx = parts.index('github.com')
-        return parts[idx+1], parts[idx+2]
+        return parts[0], parts[1].removesuffix('.git')
     
     def get_repo_info(self, url):
+        """Fetch repository metadata."""
         try:
             owner, name = self.parse_url(url)
-            resp = requests.get(f"{self.base_url}/repos/{owner}/{name}", headers=self.headers)
+            resp = requests.get(f"{self.base_url}/repos/{owner}/{name}", headers=self.headers, timeout=self.timeout)
             if resp.status_code == 200:
                 d = resp.json()
-                return {'name': d.get('name'), 'description': d.get('description'), 'language': d.get('language'), 'stars': d.get('stargazers_count', 0), 'forks': d.get('forks_count', 0)}
+                return {
+                    'name': d.get('name'),
+                    'description': d.get('description'),
+                    'language': d.get('language'),
+                    'stars': d.get('stargazers_count', 0),
+                    'forks': d.get('forks_count', 0),
+                    'default_branch': d.get('default_branch', 'main')
+                }
         except Exception:
             pass
-        return {'name': url.split('/')[-1], 'description': None, 'language': None, 'stars': 0, 'forks': 0}
+        return {'name': url.rstrip('/').split('/')[-1].removesuffix('.git'), 'description': None, 'language': None, 'stars': 0, 'forks': 0, 'default_branch': 'main'}
     
     def get_files(self, url, branch='main'):
+        """Get list of files in repository."""
         try:
             owner, name = self.parse_url(url)
-            resp = requests.get(f"{self.base_url}/repos/{owner}/{name}/git/trees/{branch}?recursive=1", headers=self.headers)
+            resp = requests.get(f"{self.base_url}/repos/{owner}/{name}/git/trees/{branch}?recursive=1", headers=self.headers, timeout=self.timeout)
             if resp.status_code == 200:
                 return [item['path'] for item in resp.json().get('tree', []) if item.get('type') == 'blob']
         except Exception:
@@ -100,9 +113,10 @@ class GitHubService:
         return []
     
     def get_file_content(self, url, path, branch='main'):
+        """Fetch file content from GitHub."""
         try:
             owner, name = self.parse_url(url)
-            resp = requests.get(f"{self.base_url}/repos/{owner}/{name}/contents/{path}", headers=self.headers)
+            resp = requests.get(f"{self.base_url}/repos/{owner}/{name}/contents/{path}", headers=self.headers, params={'ref': branch}, timeout=self.timeout)
             if resp.status_code == 200:
                 d = resp.json()
                 if d.get('encoding') == 'base64':
@@ -113,6 +127,7 @@ class GitHubService:
 
 class CodeAnalyzer:
     def analyze_python(self, content):
+        """Analyze Python code using AST."""
         try:
             tree = ast.parse(content)
             functions = []
@@ -127,6 +142,7 @@ class CodeAnalyzer:
             return self.analyze_generic(content)
     
     def _complexity(self, node):
+        """Calculate cyclomatic complexity."""
         c = 1
         for child in ast.walk(node):
             if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
@@ -134,9 +150,11 @@ class CodeAnalyzer:
         return c
     
     def analyze_js(self, content):
+        """Analyze JavaScript code."""
         return self.analyze_generic(content)
     
     def analyze_generic(self, content):
+        """Generic code analysis."""
         lines = content.splitlines()
         functions = []
         classes = []
@@ -153,6 +171,7 @@ class CodeAnalyzer:
 
 class SecurityAnalyzer:
     def scan(self, code):
+        """Scan code for security issues."""
         issues = []
         patterns = [
             ('critical', 'Hardcoded Secret', r'(?i)(password|secret|api[_-]?key|token|auth[_-]?token|client[_-]?secret)\s*=\s*["\'][^"\']+["\']'),
@@ -160,7 +179,7 @@ class SecurityAnalyzer:
             ('critical', 'Private Key', r'-----BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY-----'),
             ('high', 'SQL Injection', r'(?i)(execute|cursor\.execute|raw)\s*\(.*f["\']'),
             ('high', 'Command Injection', r'(?i)(os\.system|subprocess\.(call|run|Popen)|eval|exec|shell=True)\('),
-            ('high', 'XSS Vulnerability', r'(?i)(innerHTML|document\.write|dangerouslySetInnerHTML)'),
+            ('high', 'XSS Vulnerability', r'(?i)(innerHTML|document\.write)\s*[+]?=.*(?:userInput|user|msg|data\.response|input\.value)'),
             ('medium', 'Debug Mode', r'(?i)debug\s*=\s*True'),
             ('medium', 'Insecure Deserialization', r'(?i)(pickle\.loads|yaml\.load\()'),
             ('medium', 'Insecure HTTP', r'http://(?!localhost|127\.0\.0\.1)'),
@@ -177,6 +196,7 @@ class SecurityAnalyzer:
         return issues
     
     def _rec(self, t):
+        """Get recommendation for issue type."""
         recs = {
             'Hardcoded Secret': 'Use environment variables', 'AWS Access Key': 'Rotate key, use IAM roles',
             'Private Key': 'Never commit private keys', 'SQL Injection': 'Use parameterized queries',
@@ -189,16 +209,19 @@ class SecurityAnalyzer:
         return recs.get(t, 'Review and fix')
 
 def analyze_repository(repo_id, github_url):
+    """Fetch and analyze a GitHub repository in the background."""
     conn = sqlite3.connect('devpilot.db')
     cursor = conn.cursor()
     try:
         cursor.execute("UPDATE repositories SET status='analyzing' WHERE id=?", (repo_id,))
+        cursor.execute("DELETE FROM security_issues WHERE repository_id=?", (repo_id,))
         conn.commit()
         github = GitHubService()
         analyzer = CodeAnalyzer()
         security = SecurityAnalyzer()
         repo_info = github.get_repo_info(github_url)
-        files = github.get_files(github_url)
+        branch = repo_info.get('default_branch', 'main')
+        files = github.get_files(github_url, branch)
         all_exts = ('.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h', '.rb', '.php', '.html', '.css', '.json', '.xml', '.yaml', '.yml', '.md', '.sql', '.sh', '.toml', '.ini', '.cfg', '.txt')
         code_files = [f for f in files if f.endswith(all_exts)][:200]
         total_lines = 0
@@ -206,9 +229,11 @@ def analyze_repository(repo_id, github_url):
         total_classes = 0
         all_functions = []
         all_security_issues = []
+        file_contents = {}
         for file_path in code_files:
-            content = github.get_file_content(github_url, file_path)
+            content = github.get_file_content(github_url, file_path, branch)
             if content:
+                file_contents[file_path] = content
                 if file_path.endswith('.py'):
                     result = analyzer.analyze_python(content)
                 elif file_path.endswith(('.js', '.ts', '.jsx', '.tsx')):
@@ -225,22 +250,19 @@ def analyze_repository(repo_id, github_url):
         # Better scoring based on actual content analysis
         total_comments = 0
         total_code_lines = 0
-        for file_path in code_files:
-            content = github.get_file_content(github_url, file_path)
-            if content:
-                lines = content.splitlines()
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith('#') or stripped.startswith('//') or stripped.startswith('<!--') or stripped.startswith('/*') or stripped.startswith('*'):
-                        total_comments += 1
-                    elif stripped:
-                        total_code_lines += 1
+        for content in file_contents.values():
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith(('#', '//', '<!--', '/*', '*')):
+                    total_comments += 1
+                elif stripped:
+                    total_code_lines += 1
         
         # Documentation score: based on comments ratio AND function docstrings
         documented = sum(1 for f in all_functions if f.get('docstring'))
         func_doc_score = (documented / len(all_functions) * 100) if all_functions else 0
         comment_ratio = (total_comments / total_code_lines * 100) if total_code_lines > 0 else 0
-        doc_score = round((func_doc_score * 0.6 + comment_ratio * 0.4), 2)
+        doc_score = round((func_doc_score * 0.7 + min(comment_ratio, 40) * 0.3), 2)
         if doc_score == 0 and not all_functions:
             doc_score = round(min(comment_ratio, 100), 2)
         
@@ -295,8 +317,8 @@ async def list_repositories():
     return repos
 
 @app.post("/api/repositories")
-async def add_repository(
-    """Add a GitHub repository for analysis."""repo: RepositoryCreate, background_tasks: BackgroundTasks):
+async def add_repository(repo: RepositoryCreate, background_tasks: BackgroundTasks):
+    """Add a GitHub repository for analysis."""
     conn = sqlite3.connect('devpilot.db')
     cursor = conn.cursor()
     name = repo.github_url.rstrip('/').split('/')[-1]
@@ -313,6 +335,7 @@ async def add_repository(
 
 @app.get("/api/repositories/{repo_id}")
 async def get_repository(repo_id: int):
+    """Retrieve a specific repository by ID."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -325,6 +348,7 @@ async def get_repository(repo_id: int):
 
 @app.delete("/api/repositories/{repo_id}")
 async def delete_repository(repo_id: int):
+    """Delete a repository and its associated data."""
     conn = sqlite3.connect('devpilot.db')
     cursor = conn.cursor()
     cursor.execute("DELETE FROM repositories WHERE id=?", (repo_id,))
@@ -335,6 +359,7 @@ async def delete_repository(repo_id: int):
 
 @app.get("/api/repositories/{repo_id}/security")
 async def get_security_issues(repo_id: int):
+    """Get all security issues for a repository."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -345,6 +370,7 @@ async def get_security_issues(repo_id: int):
 
 @app.post("/api/analyze-code")
 async def analyze_code(request: CodeAnalysisRequest):
+    """Scan code for security vulnerabilities."""
     security = SecurityAnalyzer()
     issues = security.scan(request.code)
     severity_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
@@ -354,6 +380,7 @@ async def analyze_code(request: CodeAnalysisRequest):
 
 @app.post("/api/compare")
 async def compare_repositories(request: dict):
+    """Compare two repositories side by side."""
     url1 = request.get('repo1_url', '')
     url2 = request.get('repo2_url', '')
     if not url1 or not url2:
@@ -380,6 +407,7 @@ async def compare_repositories(request: dict):
 
 @app.get("/api/export/{repo_id}/json")
 async def export_json(repo_id: int):
+    """Export repository analysis as JSON."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -396,6 +424,7 @@ async def export_json(repo_id: int):
 
 @app.get("/api/stats")
 async def get_stats():
+    """Get platform-wide statistics."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -421,6 +450,7 @@ async def get_stats():
 
 @app.get("/api/repositories/{repo_id}/files")
 async def get_repo_files(repo_id: int):
+    """List all files in a repository."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -433,7 +463,9 @@ async def get_repo_files(repo_id: int):
     
     # Fetch files from GitHub
     github = GitHubService()
-    files = github.get_files(dict(repo)['github_url'])
+    repo_info = github.get_repo_info(dict(repo)['github_url'])
+    branch = repo_info.get('default_branch', 'main')
+    files = github.get_files(dict(repo)['github_url'], branch)
     all_exts = ('.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.h', '.rb', '.php', '.html', '.css', '.json', '.xml', '.yaml', '.yml', '.md', '.sql', '.sh', '.toml', '.ini', '.cfg', '.txt')
     code_files = [f for f in files if f.endswith(all_exts)][:200]
     
@@ -441,6 +473,7 @@ async def get_repo_files(repo_id: int):
 
 @app.post("/api/repositories/{repo_id}/reanalyze")
 async def reanalyze_repository(repo_id: int, background_tasks: BackgroundTasks):
+    """Re-run analysis on an existing repository."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -458,6 +491,7 @@ async def reanalyze_repository(repo_id: int, background_tasks: BackgroundTasks):
 
 @app.post("/api/ai/summarize")
 async def ai_summarize(request: dict):
+    """Generate a summary of code using AI."""
     code = request.get('code', '')
     language = request.get('language', 'Python')
     
@@ -509,6 +543,7 @@ async def ai_summarize(request: dict):
 
 @app.post("/api/ai/improve")
 async def ai_improve(request: dict):
+    """Suggest improvements for code."""
     code = request.get('code', '')
     if not code:
         raise HTTPException(status_code=400, detail="Code required")
@@ -518,7 +553,7 @@ async def ai_improve(request: dict):
     # Check for common improvements
     if 'print(' in code:
         suggestions.append("Replace print statements with logging for production code")
-    if 'except Exception:' in code and 'except Exception' not in code:
+    if re.search(r'except\s+Exception(?:\s+as\s+\w+)?\s*:', code):
         suggestions.append("Catch specific exceptions instead of bare except")
     if 'TODO' in code:
         suggestions.append("Complete or remove TODO comments")
@@ -538,6 +573,7 @@ async def ai_improve(request: dict):
 
 @app.post("/api/ai/generate-tests")
 async def ai_generate_tests(request: dict):
+    """Generate unit tests for functions."""
     code = request.get('code', '')
     function_name = request.get('function_name', 'my_function')
     if not code:
@@ -578,6 +614,7 @@ def test_{function_name}_error():
 # AI Chat Endpoints
 @app.post("/api/ai/chat")
 async def ai_chat(request: dict):
+    """Chat with AI assistant."""
     message = request.get('message', '')
     code_context = request.get('code', '')
     
@@ -594,6 +631,7 @@ async def ai_chat(request: dict):
 
 @app.post("/api/ai/improve-code")
 async def ai_improve_code(request: dict):
+    """Improve code quality using AI."""
     code = request.get('code', '')
     instruction = request.get('instruction', '')
     
@@ -607,6 +645,7 @@ async def ai_improve_code(request: dict):
 
 @app.post("/api/ai/generate-code")
 async def ai_generate_code(request: dict):
+    """Generate code from description."""
     description = request.get('description', '')
     reference_code = request.get('reference_code', '')
     
@@ -620,6 +659,7 @@ async def ai_generate_code(request: dict):
 
 @app.post("/api/ai/summarize-code")
 async def ai_summarize_code(request: dict):
+    """Summarize code functionality."""
     code = request.get('code', '')
     language = request.get('language', 'Python')
     
@@ -634,6 +674,7 @@ async def ai_summarize_code(request: dict):
 
 @app.get("/api/reports/analysis/{repo_id}")
 async def get_analysis_report(repo_id: int):
+    """Get detailed analysis report."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -655,6 +696,7 @@ async def get_analysis_report(repo_id: int):
 
 @app.get("/api/reports/statistics")
 async def get_statistics_report():
+    """Get platform statistics report."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -690,6 +732,7 @@ async def get_statistics_report():
 
 @app.get("/api/reports/comparison/{repo1_id}/{repo2_id}")
 async def get_comparison_report(repo1_id: int, repo2_id: int):
+    """Get comparison report."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -717,6 +760,7 @@ async def get_comparison_report(repo1_id: int, repo2_id: int):
 
 @app.get("/api/reports/analysis/{repo_id}/pdf")
 async def download_analysis_pdf(repo_id: int):
+    """Generate PDF report."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -796,6 +840,7 @@ async def download_analysis_pdf(repo_id: int):
 
 @app.get("/api/reports/analysis/{repo_id}/word")
 async def download_analysis_word(repo_id: int):
+    """Generate Word document report."""
     from docx import Document
     import io
     
@@ -860,6 +905,7 @@ async def download_analysis_word(repo_id: int):
 
 @app.post("/api/ai/chat-smart")
 async def ai_chat_smart(request: dict):
+    """Smart chat with support and general modes."""
     message = request.get('message', '')
     mode = request.get('mode', 'general')  # 'support' or 'general'
     code_context = request.get('code', '')
@@ -913,6 +959,7 @@ Be thorough and provide complete, working code when asked."""
 # ============ ML ENDPOINTS ============
 @app.post("/api/ml/train")
 async def train_model():
+    """Train language classification ML model."""
     ml = CodeMLService()
     code_samples, languages = ml.get_sample_training_data()
     result = ml.train_language_classifier(code_samples, languages)
@@ -920,6 +967,7 @@ async def train_model():
 
 @app.post("/api/ml/predict-language")
 async def predict_language(request: dict):
+    """Predict programming language."""
     code = request.get('code', '')
     if not code:
         raise HTTPException(status_code=400, detail="Code required")
@@ -929,6 +977,7 @@ async def predict_language(request: dict):
 
 @app.get("/api/ml/status")
 async def ml_status():
+    """Check ML model status."""
     import os
     model_file = os.path.join('ml_models', 'language_classifier.pkl')
     return {"trained": os.path.exists(model_file), "model_path": model_file}
@@ -936,6 +985,7 @@ async def ml_status():
 
 @app.get("/api/repositories/{repo_id}/ml-analysis")
 async def get_ml_analysis(repo_id: int):
+    """Analyze repository files using ML."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -950,14 +1000,16 @@ async def get_ml_analysis(repo_id: int):
     github = GitHubService()
     ml = CodeMLService()
     
-    files = github.get_files(repo['github_url'])
+    repo_info = github.get_repo_info(repo['github_url'])
+    branch = repo_info.get('default_branch', 'main')
+    files = github.get_files(repo['github_url'], branch)
     code_files = [f for f in files if f.endswith(('.py','.js','.ts','.html','.css','.json','.md','.txt','.xml','.yaml','.yml'))][:100]
     
     file_analysis = []
     language_stats = {}
     
     for file_path in code_files:
-        content = github.get_file_content(repo['github_url'], file_path)
+        content = github.get_file_content(repo['github_url'], file_path, branch)
         if content:
             # ML prediction
             prediction = ml.predict_language(content)
@@ -994,12 +1046,14 @@ async def get_ml_analysis(repo_id: int):
 
 @app.post("/api/ml/train-quality")
 async def train_quality_model():
+    """Train quality prediction model."""
     ml = CodeMLService()
     result = ml.train_quality_model()
     return {"status": "success", **result}
 
 @app.post("/api/ml/predict-quality")
 async def predict_quality(request: dict):
+    """Predict code quality score."""
     code = request.get('code', '')
     if not code:
         raise HTTPException(status_code=400, detail="Code required")
@@ -1010,6 +1064,7 @@ async def predict_quality(request: dict):
 
 @app.post("/api/ml/similarity")
 async def check_similarity(request: dict):
+    """Check code similarity."""
     code1 = request.get('code1', '')
     code2 = request.get('code2', '')
     if not code1 or not code2:

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DevPilot — Code Intelligence Platform</title>
+    <!-- Dashboard layout, theme, and component styles. -->
     <style>
         :root {
             --bg: #fafafa;
@@ -345,6 +346,7 @@
         </div>
     </div>
     
+    <!-- Dashboard interactions and API integrations. -->
     <script>
         function sanitize(str) {
             if (!str) return '';
@@ -356,9 +358,11 @@
             // For trusted HTML only, not user input
             element.innerHTML = html;
         }
+        // Backend base URL used by all dashboard requests.
         const API = 'https://bookish-eureka-694r7v747p7vh47p6-8000.app.github.dev';
         let repoCache = [];
         
+        // Global navigation and theme controls.
         function toggleTheme() {
             const body = document.body;
             const text = document.getElementById('themeText');
@@ -398,6 +402,7 @@
             } catch(e) { msgs.innerHTML += '<div class="chat-msg ai-msg">Error.</div>'; }
         }
         
+        // Repository list, metrics, and repository actions.
         async function loadRepos() {
             try {
                 const res = await fetch(API + '/api/repositories');
@@ -592,6 +597,7 @@
                 div.innerHTML = '<select id="cr1">' + repoCache.map(r => '<option value="' + r.id + '">' + (r.name||r.github_url) + '</option>').join('') + '</select><select id="cr2">' + repoCache.map(r => '<option value="' + r.id + '">' + (r.name||r.github_url) + '</option>').join('') + '</select><button onclick="window.open(\'report.html?type=comparison&id=\' + document.getElementById(\'cr1\').value + \'&id2=\' + document.getElementById(\'cr2\').value, \'_blank\')" style="margin-top:8px;">View Comparison</button>';
             }
         }
+        // AI-assisted code tools.
         async function aiSummarize() {
             const code = document.getElementById('aiSummarizeInput').value;
             if (!code.trim()) return;
@@ -620,6 +626,7 @@
             document.getElementById('issueDescription').value = '';
         }
         
+        // Machine-learning model training and prediction tools.
         async function analyzeRepoML() {
             const repoId = document.getElementById('mlRepoSelect').value;
             const div = document.getElementById('mlAnalysisResult');

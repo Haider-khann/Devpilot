@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DevPilot - Report Preview</title>
+    <!-- Report layout, score colors, and download button styles. -->
     <style>
         :root { --bg:#f8fafc; --card:#fff; --text:#0f172a; --muted:#64748b; --primary:#6366f1; --border:#e2e8f0; }
         [data-theme="dark"] { --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --primary:#818cf8; --border:#334155; }
@@ -42,15 +43,18 @@
     <div class="container" id="reportContent">
         <p style="text-align:center;color:var(--muted);">Loading report...</p>
     </div>
+    <!-- Loads and renders analysis, statistics, and comparison reports. -->
     <script>
         const params = new URLSearchParams(window.location.search);
         const type = params.get('type');
         const id = params.get('id');
         const id2 = params.get('id2');
+        // Backend base URL used to retrieve report data and downloads.
         const API = 'https://bookish-eureka-694r7v747p7vh47p6-8000.app.github.dev';
         
         function scoreClass(score) { return score > 60 ? 'score-good' : score > 30 ? 'score-medium' : 'score-bad'; }
         
+        // Select the report type from query parameters and render its content.
         async function loadReport() {
             const div = document.getElementById('reportContent');
             let data;

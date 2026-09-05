@@ -1,9 +1,12 @@
-﻿services:
+﻿# Render service definition when deploying from the backend directory.
+services:
   - type: web
     name: devpilot
     env: python
+    # Install dependencies from the local requirements file.
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    # Keep API credentials outside source control.
     envVars:
       - key: GEMINI_API_KEY
         sync: false

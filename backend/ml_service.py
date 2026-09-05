@@ -153,7 +153,7 @@ class CodeMLService:
             tfidf = vectorizer.fit_transform([code1, code2])
             similarity = cosine_similarity(tfidf[0], tfidf[1])[0][0]
             return round(similarity * 100, 2)
-        except:
+        except Exception:
             return 0.0
     
     def detect_duplicates(self, code_snippets):

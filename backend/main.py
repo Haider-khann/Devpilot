@@ -85,7 +85,7 @@ class GitHubService:
             if resp.status_code == 200:
                 d = resp.json()
                 return {'name': d.get('name'), 'description': d.get('description'), 'language': d.get('language'), 'stars': d.get('stargazers_count', 0), 'forks': d.get('forks_count', 0)}
-        except:
+        except Exception:
             pass
         return {'name': url.split('/')[-1], 'description': None, 'language': None, 'stars': 0, 'forks': 0}
     
@@ -95,7 +95,7 @@ class GitHubService:
             resp = requests.get(f"{self.base_url}/repos/{owner}/{name}/git/trees/{branch}?recursive=1", headers=self.headers)
             if resp.status_code == 200:
                 return [item['path'] for item in resp.json().get('tree', []) if item.get('type') == 'blob']
-        except:
+        except Exception:
             pass
         return []
     
@@ -107,7 +107,7 @@ class GitHubService:
                 d = resp.json()
                 if d.get('encoding') == 'base64':
                     return base64.b64decode(d['content']).decode('utf-8', errors='ignore')
-        except:
+        except Exception:
             pass
         return None
 
@@ -123,7 +123,7 @@ class CodeAnalyzer:
                 elif isinstance(node, ast.ClassDef):
                     classes.append({'name': node.name, 'methods': []})
             return {'lines': len(content.splitlines()), 'functions': functions, 'classes': classes, 'num_functions': len(functions), 'num_classes': len(classes)}
-        except:
+        except Exception:
             return self.analyze_generic(content)
     
     def _complexity(self, node):
@@ -275,14 +275,17 @@ def analyze_repository(repo_id, github_url):
 
 @app.get("/")
 async def root():
+    """Root endpoint - returns API information."""
     return {"name": "DevPilot", "version": "3.0.0"}
 
 @app.get("/health")
 async def health():
+    """Health check endpoint."""
     return {"status": "healthy"}
 
 @app.get("/api/repositories")
 async def list_repositories():
+    """List all analyzed repositories."""
     conn = sqlite3.connect('devpilot.db')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -292,7 +295,8 @@ async def list_repositories():
     return repos
 
 @app.post("/api/repositories")
-async def add_repository(repo: RepositoryCreate, background_tasks: BackgroundTasks):
+async def add_repository(
+    """Add a GitHub repository for analysis."""repo: RepositoryCreate, background_tasks: BackgroundTasks):
     conn = sqlite3.connect('devpilot.db')
     cursor = conn.cursor()
     name = repo.github_url.rstrip('/').split('/')[-1]
@@ -514,7 +518,7 @@ async def ai_improve(request: dict):
     # Check for common improvements
     if 'print(' in code:
         suggestions.append("Replace print statements with logging for production code")
-    if 'except:' in code and 'except Exception' not in code:
+    if 'except Exception:' in code and 'except Exception' not in code:
         suggestions.append("Catch specific exceptions instead of bare except")
     if 'TODO' in code:
         suggestions.append("Complete or remove TODO comments")
